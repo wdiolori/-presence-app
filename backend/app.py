@@ -31,8 +31,7 @@ def extract_text(path):
     return ""
 
 def extract_names(text):
-    lines = text.split("
-")
+    lines = text.split("\n")
     names = []
     for l in lines:
         l = re.sub(r'[^A-Za-zÀ-ÿ\s]', '', l.strip())
