@@ -1,0 +1,7 @@
+flask
+flask-cors
+pytesseract
+pillow
+requests
+rapidfuzz
+gunicorn
