@@ -28,7 +28,7 @@ HEADERS = {
 
 def extract_text(path):
     img = Image.open(path).convert("L")
-    return pytesseract.image_to_string(img, lang="fra")
+    return ""
 
 def extract_names(text):
     lines = text.split("
