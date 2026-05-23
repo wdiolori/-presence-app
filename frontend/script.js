@@ -1,4 +1,4 @@
-const API = "https://TON_BACKEND_URL.onrender.com";
+const API = "https://presence-app-wdeq.onrender.com";
 const form = document.getElementById("form");
 form.onsubmit = async (e) => {
  e.preventDefault();
