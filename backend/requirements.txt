@@ -4,4 +4,3 @@ pillow
 requests
 rapidfuzz
 gunicorn
-google-cloud-vision
