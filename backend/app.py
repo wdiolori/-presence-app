@@ -1,6 +1,7 @@
+import json
+from google.cloud import vision
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pytesseract
 from PIL import Image
 import requests
 import re
@@ -26,8 +27,26 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+import json
+from google.cloud import vision
+
 def extract_text(path):
-    img = Image.open(path).convert("L")
+    credentials_json = os.environ.get("GOOGLE_CREDENTIALS")
+    creds_dict = json.loads(credentials_json)
+
+    client = vision.ImageAnnotatorClient.from_service_account_info(creds_dict)
+
+    with open(path, "rb") as image_file:
+        content = image_file.read()
+
+    image = vision.Image(content=content)
+
+    response = client.text_detection(image=image)
+
+    texts = response.text_annotations
+
+    if texts:
+        return texts[0].description
     return ""
 
 def extract_names(text):
