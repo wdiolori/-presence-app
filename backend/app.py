@@ -34,7 +34,7 @@ def extract_text(path):
     url = "https://api.ocr.space/parse/image"
 
     payload = {
-        "apikey": "helloworld",  # gratuit (limité)
+        "apikey": "helloworld",  # gratuit limité
         "language": "fre"
     }
 
@@ -48,3 +48,30 @@ def extract_text(path):
 
     except Exception as e:
         print("OCR ERROR:", e)
+        print("OCR RESPONSE:", result if 'result' in locals() else "No response")
+        return ""
+
+
+# =========================
+# EXTRACTION NOMS
+# =========================
+def extract_names(text):
+    lines = text.split("\n")
+    names = []
+
+    for l in lines:
+        l = re.sub(r'[^A-Za-zÀ-ÿ\s]', '', l.strip())
+
+        if len(l.split()) >= 2:
+            names.append(l)
+
+    print("NAMES DETECTED:", names)
+    return names
+
+
+# =========================
+# AIRTABLE
+# =========================
+def get_records():
+    url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE}"
+    res = requests.get(url, headers=HEADERS).json()
