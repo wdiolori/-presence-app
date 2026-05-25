@@ -54,22 +54,43 @@ def extract_text(path):
 # =========================
 # EXTRACTION NOMS
 # =========================
+import re
+import logging
+
+def normalize_name(raw_name: str) -> str:
+    if raw_name == raw_name.upper():
+        return raw_name.title()
+
+    words = raw_name.split()
+    normalized = []
+
+    for word in words:
+        if '-' in word:
+            normalized.append('-'.join(part.capitalize() for part in word.split('-')))
+        else:
+            normalized.append(word.capitalize())
+
+    return ' '.join(normalized)
+
+
 def extract_names(text):
     print("OCR TEXT:", text)
-    
-    text = re.sub(r'[^A-Za-zÀ-ÿ\s]', ' ', text)
-    
-    words = text.split()
-    
+
+    lines = text.splitlines()
     names = []
-    
-    # reconstruire noms par paires
-    for i in range(len(words) - 1):
-        name = words[i] + " " + words[i+1]
-        names.append(name)
-    
+
+    for line in lines:
+        cleaned = re.sub(r'[^A-Za-zÀ-ÿ\s\-]', ' ', line)
+        cleaned = " ".join(cleaned.split())
+
+        words = cleaned.split()
+
+        if len(words) >= 2 and all(len(w) > 1 for w in words):
+            names.append(normalize_name(cleaned))
+
     print("NAMES DETECTED:", names)
     return names
+  
 
 # =========================
 # AIRTABLE
