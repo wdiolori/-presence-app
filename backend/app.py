@@ -33,49 +33,69 @@ import base64
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-def extract_names_from_image(path):
 
+def extract_names_from_image(path):
     with open(path, "rb") as f:
         image_bytes = f.read()
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    response = client.responses.create(
-        model="gpt-4.1-mini",
-        input=[
+    # FIX 1 : utilisation correcte de l'API OpenAI (chat.completions + image_url)
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
             {
                 "role": "user",
                 "content": [
                     {
-                        "type": "input_text",
-                        "text": "Voici une feuille de présence. Extrais uniquement les noms et prénoms sous forme de liste JSON."
+                        "type": "text",
+                        "text": (
+                            "Voici une feuille de présence. "
+                            "Extrais uniquement les noms et prénoms sous forme de liste JSON. "
+                            "Réponds UNIQUEMENT avec le JSON brut, sans texte autour, "
+                            "sans balises markdown. Exemple : [\"Jean Dupont\", \"Marie Martin\"]"
+                        )
                     },
                     {
-                        "type": "input_image",
-                        "image_base64": image_base64
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_base64}"
+                        }
                     }
-                ],
+                ]
             }
         ],
+        max_tokens=1000
     )
 
-    text = response.output[0].content[0].text
-
+    text = response.choices[0].message.content
     print("AI RESPONSE:", text)
 
+    # FIX 2 : nettoyage des balises markdown éventuelles avant parsing JSON
     try:
-        names = json.loads(text)
-        return names
-    except:
+        clean = re.sub(r"```json|```", "", text).strip()
+        names = json.loads(clean)
+        return names if isinstance(names, list) else []
+    except Exception as e:
+        print("Erreur parsing JSON:", e)
         return []
-``
+
 
 # =========================
 # AIRTABLE
 # =========================
 def get_records():
+    # FIX 3 : gestion de la pagination Airtable (max 100 records par page)
     url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE}"
-    res = requests.get(url, headers=HEADERS).json()
-    return res.get("records", [])
+    records = []
+    params = {}
+    while True:
+        res = requests.get(url, headers=HEADERS, params=params).json()
+        records.extend(res.get("records", []))
+        offset = res.get("offset")
+        if not offset:
+            break
+        params["offset"] = offset
+    return records
 
 
 def update_record(record_id, status):
@@ -87,7 +107,6 @@ def update_record(record_id, status):
 
 def create_record(last, first, status):
     url = f"https://api.airtable.com/v0/{BASE_ID}/{TABLE}"
-
     requests.post(url, headers=HEADERS, json={
         "fields": {
             FIELD_LAST: last,
@@ -96,27 +115,44 @@ def create_record(last, first, status):
         }
     })
 
+
 # =========================
 # MATCHING
 # =========================
 def find_matches(name, records):
-    results = []
+    """
+    Teste les deux ordres possibles (Prénom Nom et Nom Prénom) contre
+    chaque entrée Airtable et retient le meilleur score.
+    """
+    parts = name.strip().split()
+    # Si au moins 2 mots, on génère les deux variantes ; sinon on garde tel quel
+    if len(parts) >= 2:
+        variant_a = name                              # tel que reçu
+        variant_b = " ".join(parts[1:] + [parts[0]]) # rotation : dernier → premier
+        candidates = [variant_a, variant_b]
+    else:
+        candidates = [name]
 
+    results = []
     for r in records:
         f = r.get("fields", {})
+        db_name = f"{f.get(FIELD_LAST, '')} {f.get(FIELD_FIRST, '')}".strip()
 
-        db_name = f"{f.get(FIELD_LAST, '')} {f.get(FIELD_FIRST, '')}"
+        # Score maximum sur les deux variantes
+        best_score = max(
+            fuzz.token_sort_ratio(c.lower(), db_name.lower())
+            for c in candidates
+        )
 
-        score = fuzz.token_sort_ratio(name.lower(), db_name.lower())
-
-        if score > 60:
+        if best_score > 60:
             results.append({
                 "id": r["id"],
                 "name": db_name,
-                "score": score
+                "score": best_score
             })
 
     return sorted(results, key=lambda x: x["score"], reverse=True)[:3]
+
 
 # =========================
 # ROUTES API
@@ -137,16 +173,15 @@ def upload():
     records = get_records()
 
     results = []
-
     for name in names:
         matches = find_matches(name, records)
-
         results.append({
             "input": name,
             "matches": matches
         })
 
     return jsonify(results)
+
 
 @app.route("/validate", methods=["POST"])
 def validate():
@@ -158,10 +193,11 @@ def validate():
         update_record(data["record_id"], status)
 
     elif action == "create":
-        parts = data["name"].split()
-        last = " ".join(parts[:-1])
-        first = parts[-1]
-
+        # On ne peut pas deviner l'ordre, on stocke le premier mot comme Prénom
+        # et le reste comme Nom — le front devrait idéalement envoyer les deux champs séparés
+        parts = data["name"].strip().split()
+        first = parts[0]
+        last = " ".join(parts[1:]) if len(parts) > 1 else ""
         create_record(last, first, status)
 
     return jsonify({"ok": True})
