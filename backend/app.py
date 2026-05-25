@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 import re
 import os
+import json
 from rapidfuzz import fuzz
 
 app = Flask(__name__)
@@ -27,70 +28,46 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-# =========================
-# OCR.SPACE
-# =========================
-def extract_text(path):
-    url = "https://api.ocr.space/parse/image"
+from openai import OpenAI
+import base64
 
-    payload = {
-        "apikey": "helloworld",
-        "language": "fre"
-    }
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+def extract_names_from_image(path):
+
+    with open(path, "rb") as f:
+        image_bytes = f.read()
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    response = client.responses.create(
+        model="gpt-4.1-mini",
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "Voici une feuille de présence. Extrais uniquement les noms et prénoms sous forme de liste JSON."
+                    },
+                    {
+                        "type": "input_image",
+                        "image_base64": image_base64
+                    }
+                ],
+            }
+        ],
+    )
+
+    text = response.output[0].content[0].text
+
+    print("AI RESPONSE:", text)
 
     try:
-        with open(path, "rb") as f:
-            files = {"file": f}
-            response = requests.post(url, files=files, data=payload)
-            result = response.json()
-
-        return result["ParsedResults"][0]["ParsedText"]
-
-    except Exception as e:
-        print("OCR ERROR:", e)
-        print("OCR RESPONSE:", result if 'result' in locals() else "No response")
-        return ""
-
-# =========================
-# EXTRACTION NOMS
-# =========================
-import re
-import logging
-
-def normalize_name(raw_name: str) -> str:
-    if raw_name == raw_name.upper():
-        return raw_name.title()
-
-    words = raw_name.split()
-    normalized = []
-
-    for word in words:
-        if '-' in word:
-            normalized.append('-'.join(part.capitalize() for part in word.split('-')))
-        else:
-            normalized.append(word.capitalize())
-
-    return ' '.join(normalized)
-
-
-def extract_names(text):
-    print("OCR TEXT:", text)
-
-    lines = text.splitlines()
-    names = []
-
-    for line in lines:
-        cleaned = re.sub(r'[^A-Za-zÀ-ÿ\s\-]', ' ', line)
-        cleaned = " ".join(cleaned.split())
-
-        words = cleaned.split()
-
-        if len(words) >= 2 and all(len(w) > 1 for w in words):
-            names.append(normalize_name(cleaned))
-
-    print("NAMES DETECTED:", names)
-    return names
-  
+        names = json.loads(text)
+        return names
+    except:
+        return []
+``
 
 # =========================
 # AIRTABLE
@@ -152,15 +129,14 @@ def upload():
     path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(path)
 
-    print("📸 Image reçue:", file.filename)
+print("📸 Image reçue:", file.filename)
 
-    text = extract_text(path)
-    print("OCR TEXT:", text)
+names = extract_names_from_image(path)
+print("AI NAMES:", names)
 
-    names = extract_names(text)
-    records = get_records()
+records = get_records()
 
-    results = []
+results = []
 
     for name in names:
         matches = find_matches(name, records)
