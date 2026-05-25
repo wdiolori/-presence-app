@@ -57,7 +57,7 @@ def extract_text(path):
 def extract_names(text):
     print("OCR TEXT:", text)
     
-    re.sub(r'[^A-Za-zÀ-ÿ\s]', ' ', text)    # Remplacer tout par espaces propres
+    text = re.sub(r'[^A-Za-zÀ-ÿ\s]', ' ', text)
     
     words = text.split()
     
