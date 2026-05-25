@@ -55,14 +55,18 @@ def extract_text(path):
 # EXTRACTION NOMS
 # =========================
 def extract_names(text):
-    lines = text.split("\n")
+    print("OCR TEXT:", text)
+
+ re.sub(r'[^A-Za-zÀ-ÿ\s]', ' ', text)    # Remplacer tout par espaces propres
+
+    words = text.split()
+
     names = []
 
-    for l in lines:
-        l = re.sub(r'[^A-Za-zÀ-ÿ\s]', '', l.strip())
-
-        if len(l.split()) >= 2:
-            names.append(l)
+    # reconstruire noms par paires
+    for i in range(len(words) - 1):
+        name = words[i] + " " + words[i+1]
+        names.append(name)
 
     print("NAMES DETECTED:", names)
     return names
