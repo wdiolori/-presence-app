@@ -129,14 +129,14 @@ def upload():
     path = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(path)
 
-print("📸 Image reçue:", file.filename)
+    print("📸 Image reçue:", file.filename)
 
-names = extract_names_from_image(path)
-print("AI NAMES:", names)
+    names = extract_names_from_image(path)
+    print("AI NAMES:", names)
 
-records = get_records()
+    records = get_records()
 
-results = []
+    results = []
 
     for name in names:
         matches = find_matches(name, records)
@@ -147,7 +147,6 @@ results = []
         })
 
     return jsonify(results)
-
 
 @app.route("/validate", methods=["POST"])
 def validate():
